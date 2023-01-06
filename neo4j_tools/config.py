@@ -15,8 +15,7 @@ def set_neo_config(
         'user': user,
         'password': password,
         'database': database,
-        'server': server,
-        'port': port,
+        'uri': f"bolt://{server}:{port}",
         'import_folder': import_folder       
     }
     for param, value in config_dict.items():
@@ -37,7 +36,6 @@ def write_to_config(section: str, option: str, value: str) -> None:
     """
     if value:
         cfp = defaults.config_file_path
-        print(cfp)
         config = RawConfigParser()
 
         if not os.path.exists(cfp):

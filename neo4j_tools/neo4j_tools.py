@@ -19,11 +19,10 @@ from tqdm import tqdm
 import numpy as np
 import re
 from typing_extensions import LiteralString
-
+from neo4j_tools import defaults
 
 config = configparser.ConfigParser()
-config.read('/home/ceb/.neo4j-tools/config.ini')
-
+config.read(defaults.config_file_path)
 
 # set database
 # mysql_user = config['MYSQL']['user']
@@ -140,8 +139,9 @@ class Db:
         cypher = "MATCH (n) RETURN n"
         return [x['n'] for x in self.exec_data(cypher)]
 
-    def nodes_by_label(self, label:LiteralString):
-        cypher = f"MATCH (n:{label}) RETURN n"
+    def nodes_by_label(self, label:str, limit:Optional[int]=None):
+        cypher_limit = f"LIMIT {limit}" if limit else ''
+        cypher = f"MATCH (n:{label}) RETURN n {cypher_limit}"
         return [x['n'] for x in self.exec_data(cypher)]
 
     def create_node(self, node: Node):
@@ -265,16 +265,22 @@ class Db:
             DELETE n RETURN count(n) AS number_of_deleted_nodes"""
         return self.session.run(cypher).data()[0]['number_of_deleted_nodes']
 
-    def get_number_of_nodes(self, node: Node):
-        where_str = node.get_where('n')
-        where = f" WHERE {where_str}" if where_str else ''
-        cypher = f"MATCH (n:{node.label}) {where} RETURN count(n) AS num"""
+    def get_number_of_nodes(self, node: Optional[Node]=None) -> int:
+        where, label = '', ''
+        if node:
+            where_str = node.get_where('n')
+            where = f" WHERE {where_str}" if where_str else ''
+            label = f":{node.label}"
+        cypher = f"MATCH (n{label}) {where} RETURN count(n) AS num"""
         return self.session.run(cypher).data()[0]['num']
 
-    def get_number_of_edges(self, edge: Edge):
-        where_str = edge.get_where('e')
-        where = f" WHERE {where_str}" if where_str else ''
-        cypher = f"MATCH ()-[e:{edge.label}]-() {where} RETURN count(e) AS num"""
+    def get_number_of_edges(self, edge: Optional[Edge]=None) -> int:
+        where, label = '', ''
+        if edge:
+            where_str = edge.get_where('e')
+            where = f" WHERE {where_str}" if where_str else ''
+            label = f":{edge.label}"
+        cypher = f"MATCH ()-[e{label}]-() {where} RETURN count(e) AS num"""
         return self.session.run(cypher).data()[0]['num']
 
     def delete_edges(self, edge: Edge):
