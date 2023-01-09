@@ -19,7 +19,7 @@ def main():
 @main.command()
 @click.option('-u', '--user', help="User")
 @click.option('-p', '--password', help="Password")
-@click.option('-d', '--database', help="Database name")
+@click.option('-d', '--database', default='', help="Database name")
 @click.option('-s', '--server', default='localhost', help="Server name")
 @click.option('-o', '--port', default='7687', help="Server port")
 @click.option('-i', '--import_folder', default="/opt/neo4j/import/", help="Path to import folder")
