@@ -179,7 +179,7 @@ class Db:
         cypher = f"MATCH (n:{Node(labels).cypher_labels}) RETURN n {cypher_limit}"
         return [x["n"] for x in self.exec_data(cypher)]
 
-    def create_node(self, node: Node):
+    def create_node(self, node: Node) -> int:
         """Create a node with label and properties."""
         cypher = (
             f"CREATE (n:{node.cypher_labels} {node.cypher_props}) return ID(n) as nid"
@@ -225,7 +225,7 @@ class Db:
 
     def merge_node(self, node: Node):
         """Creates a node with props if not exists"""
-        cypher = f"""MERGE (n:{node.label} {node.cypher_props}) return ID(n) as id"""
+        cypher = f"""MERGE (n:{node.cypher_labels} {node.cypher_props}) return ID(n) as id"""
         try:
             return self.session.run(cypher).data()[0]["id"]
         except:
@@ -235,9 +235,9 @@ class Db:
     def merge_edge(self, subj: Node, rel: Edge, obj: Node):
         """MERGE finds or creates a relationship between the nodes."""
         cypher = f"""
-            MERGE (subject:{subj.label} {subj.cypher_props})
-            MERGE (object:{obj.label} {obj.cypher_props})
-            MERGE (subject)-[relation:{rel.label} {rel.cypher_props}]->(object)
+            MERGE (subject:{subj.cypher_labels} {subj.cypher_props})
+            MERGE (object:{obj.cypher_labels} {obj.cypher_props})
+            MERGE (subject)-[relation:{rel.cypher_labels} {rel.cypher_props}]->(object)
             RETURN subject, relation, object"""
         return self.session.run(cypher)
 
@@ -246,7 +246,13 @@ class Db:
         cypher = """MATCH (a:Person {name: $value1})
             MERGE (a)-[r:KNOWS]->(b:Person {name: $value3})"""
 
-    def delete_edge(self, edge_id: int):
+    def delete_edges(self, edge: Edge):
+        """Delete edges by Edge class."""
+        where = f"WHERE {edge.get_where('r')}" if edge.props else ''
+        cypher = f"""MATCH ()-[r:{edge.cypher_labels}]->() {where} DELETE r RETURN count(r) AS num"""
+        return self.session.run(cypher).data()[0]["num"]
+
+    def delete_edge_by_id(self, edge_id: int):
         """Delete an edge by id."""
         cypher = f"""MATCH ()-[r]->()
             WHERE r.id = {edge_id}
@@ -258,13 +264,12 @@ class Db:
 
     def delete_nodes(self, node: Node):
         """Delete all nodes (and connected edges) with a specific label."""
-        constraints_str = node.get_where("n")
-        where = f" WHERE {constraints_str}" if constraints_str else ""
+        where = f"WHERE {node.get_where('n')}" if node.props else ''
         cypher = (
             f"""MATCH (n:{node.cypher_labels}) {where} DETACH DELETE n """
-            "RETURN count(n) AS number_of_deleted_nodes"
+            "RETURN count(n) AS num"
         )
-        return self.session.run(cypher).data()[0]["number_of_deleted_nodes"]
+        return self.session.run(cypher).data()[0]["num"]
 
     def delete_node_and_connected_edges(self, id: int):
         """Delete a node and all relationships/edges connected to it."""
@@ -323,18 +328,6 @@ class Db:
         cypher = f"MATCH ()-[e{label}]-() {where} RETURN count(e) AS num" ""
         return self.session.run(cypher).data()[0]["num"]
 
-    def delete_edges(self, edge: Edge):
-        """Delete all edges."""
-        constraints_str = edge.get_where("r")
-        where = f" WHERE {constraints_str}" if constraints_str else ""
-        cypher = (
-            f"MATCH ()-[r:{edge.cypher_labels}]-() {where} DELETE r "
-            ""
-            "RETURN count(r) AS n"
-        )
-        result = self.session.run(cypher)
-        if result:
-            return result.data()[0]["n"]
 
     def remove_node_label(self, labels: Union[set[str], str], node_id):
         """Remove a label(s) from a node."""
@@ -482,7 +475,7 @@ class Db:
         return self.session.run(cypher)
 
     def get_node(self, node: Node):
-        cypher = f"MATCH (n:{node.label}) where {node.get_where('n')} return n"
+        cypher = f"MATCH (n:{node.cypher_labels}) where {node.get_where('n')} return n"
         return [x["n"] for x in self.exec_data(cypher)]
 
     def get_node_by_id(self, node_id: int):
@@ -500,4 +493,16 @@ class Db:
 
     def show_procedures(self):
         return self.session.run('CALL dbms.procedures()').to_df()
+
+    def get_edge_types_by_prefix(self, prefix: str):
+        cypher = f"MATCH ()-[r]->() where type(r)=~'^{prefix}__.*' RETURN distinct type(r)"
+        return [x[0] for x in self.session.run(cypher).values()]
+
+    def count_nodes(self, node:Node):
+        cypher = f"match (n:{node.cypher_labels}) return count(n) as num"
+        return self.session.run(cypher).data()[0]['num']
+
+    def count_edges(self, edge:Edge):
+        cypher = f"match ()-[r:{edge.cypher_labels}]->() return count(r) as num"
+        return self.session.run(cypher).data()[0]['num']
 
