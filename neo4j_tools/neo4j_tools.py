@@ -44,7 +44,8 @@ neo4j_database = config["NEO4J"].get("database", None)
 # conn = pymysql.connect(user=mysql_user, passwd=mysql_passwd, host=mysql_host, database=mysql_database)
 # dict_cursor = conn.cursor(cursors.DictCursor)
 
-Relationship = namedtuple('Relationship', ['subj_id', 'edge_id', 'obj_id'])
+Relationship = namedtuple("Relationship", ["subj_id", "edge_id", "obj_id"])
+
 
 def get_standard_name(name: str) -> str:
     """Return standard name."""
@@ -124,8 +125,8 @@ class Db:
     def __init__(
         self,
         password=neo4j_password,
-        uri="bolt://localhost:7687",
-        user="neo4j",
+        uri=neo4j_uri,
+        user=neo4j_user,
         database=neo4j_database,
         neo4j_import_folder=neo4j_import_folder,
     ):
@@ -138,6 +139,9 @@ class Db:
         )
         self.session = self.driver.session()
         self.import_folder = neo4j_import_folder
+
+    def __str__(self):
+        return f"<neo4j_tools:Db {{user:{self._user}, database:{self._database}, uri: {self._uri} }}>"
 
     def exec_data(self, cypher: LiteralString):
         r = self.session.run(cypher)
@@ -184,7 +188,7 @@ class Db:
         cypher = (
             f"CREATE (n:{node.cypher_labels} {node.cypher_props}) return ID(n) as nid"
         )
-        return self.session.run(cypher).data()[0]['nid']
+        return self.session.run(cypher).data()[0]["nid"]
 
     def __get_sql_value(self, value):
         return f'"' + json.dumps(value) + '"' if isinstance(value, str) else value
@@ -197,7 +201,7 @@ class Db:
     def create_edge(self, subj: Node, edge: Edge, obj: Node):
         cypher = f"CREATE (subj:{subj.cypher_labels} {subj.cypher_props})"
         cypher += f"-[edge:{edge.cypher_labels} {edge.cypher_props}]->"
-        cypher += f"(obj:{obj.cypher_labels} {obj.cypher_props})"""
+        cypher += f"(obj:{obj.cypher_labels} {obj.cypher_props})" ""
         cypher += " RETURN ID(subj) as subj_id, ID(edge) as edge_id, ID(obj) as obj_id"
         r = self.session.run(cypher).values()[0]
         return Relationship(*r)
@@ -225,7 +229,9 @@ class Db:
 
     def merge_node(self, node: Node):
         """Creates a node with props if not exists"""
-        cypher = f"""MERGE (n:{node.cypher_labels} {node.cypher_props}) return ID(n) as id"""
+        cypher = (
+            f"""MERGE (n:{node.cypher_labels} {node.cypher_props}) return ID(n) as id"""
+        )
         try:
             return self.session.run(cypher).data()[0]["id"]
         except:
@@ -248,7 +254,7 @@ class Db:
 
     def delete_edges(self, edge: Edge):
         """Delete edges by Edge class."""
-        where = f"WHERE {edge.get_where('r')}" if edge.props else ''
+        where = f"WHERE {edge.get_where('r')}" if edge.props else ""
         cypher = f"""MATCH ()-[r:{edge.cypher_labels}]->() {where} DELETE r RETURN count(r) AS num"""
         return self.session.run(cypher).data()[0]["num"]
 
@@ -264,7 +270,7 @@ class Db:
 
     def delete_nodes(self, node: Node):
         """Delete all nodes (and connected edges) with a specific label."""
-        where = f"WHERE {node.get_where('n')}" if node.props else ''
+        where = f"WHERE {node.get_where('n')}" if node.props else ""
         cypher = (
             f"""MATCH (n:{node.cypher_labels}) {where} DETACH DELETE n """
             "RETURN count(n) AS num"
@@ -287,11 +293,31 @@ class Db:
             DELETE n, r"""
         return self.session.run(cypher)
 
-    def delete_all(self):
+    def empty_database(self):
+        self.recreate_database()
+
+    def recreate_database(self):
+        self.session.run(f"DROP DATABASE {self._database}")
+        self.session.run(f"CREATE DATABASE {self._database}")
+
+    def delete_all(self) -> int:
         """Delete all nodes and relationships from the database."""
         return self.session.run(
             "MATCH (n) DETACH DELETE n return count(n) AS num"
         ).data()[0]["num"]
+
+    def delete_all_if_many(self, node:Optional[Node]=None):
+        """Use this method if many node has to be deleted."""
+        if node:
+            where = node.get_where('n')
+            cypher_where = f" WHERE {where}" if where else ''
+            cypher = f"""MATCH (n:{node.cypher_labels}) {cypher_where}
+                CALL {{ WITH n
+                    DETACH DELETE n
+                }} IN TRANSACTIONS OF 10000 ROWS"""
+        else:
+            cypher = "MATCH (n) CALL { WITH n DETACH DELETE n} IN TRANSACTIONS OF 10000 ROWS"
+        return self.session.run(cypher)
 
     def delete_nodes_with_no_edges(self, node: Node):
         cypher_where = ""
@@ -325,9 +351,8 @@ class Db:
             where_str = edge.get_where("e")
             where = f" WHERE {where_str}" if where_str else ""
             label = f":{edge.cypher_labels}"
-        cypher = f"MATCH ()-[e{label}]-() {where} RETURN count(e) AS num" ""
+        cypher = f"MATCH ()-[e{label}]->() {where} RETURN count(e) AS num" ""
         return self.session.run(cypher).data()[0]["num"]
-
 
     def remove_node_label(self, labels: Union[set[str], str], node_id):
         """Remove a label(s) from a node."""
@@ -433,7 +458,7 @@ class Db:
                 cypher = f"CREATE {nodes}"
                 self.session.run(cypher)
 
-    def create_node_index(self, index_name: str, label: str, prop_name: str):
+    def create_node_index(self, label: str, prop_name: str, index_name: Optional[str]=''):
         cypher = f"CREATE INDEX {index_name} IF NOT EXISTS FOR (p:{label}) ON (p.{prop_name})"
         return self.session.run(cypher)
 
@@ -447,6 +472,10 @@ class Db:
 
     def drop_node_index(self, index_name: str):
         cypher = f"DROP INDEX {index_name} IF EXISTS"
+        return self.session.run(cypher)
+
+    def drop_constraint(self, constraint_name):
+        cypher = f"DROP CONSTRAINT {constraint_name} IF EXISTS"
         return self.session.run(cypher)
 
     def create_unique_constraint(
@@ -484,7 +513,6 @@ class Db:
         if values:
             return values[0][0]
 
-
     def get_edge_by_id(self, edge_id: int):
         cypher = f"MATCH (n)-[r]->(m) WHERE ID(r) = {edge_id} RETURN n,r,m LIMIT 1"
         values = self.session.run(cypher).values()
@@ -492,17 +520,35 @@ class Db:
             return values[0]
 
     def show_procedures(self):
-        return self.session.run('CALL dbms.procedures()').to_df()
+        return self.session.run("CALL dbms.procedures()").to_df()
 
     def get_edge_types_by_prefix(self, prefix: str):
-        cypher = f"MATCH ()-[r]->() where type(r)=~'^{prefix}__.*' RETURN distinct type(r)"
+        cypher = (
+            f"MATCH ()-[r]->() where type(r)=~'^{prefix}__.*' RETURN distinct type(r)"
+        )
         return [x[0] for x in self.session.run(cypher).values()]
 
-    def count_nodes(self, node:Node):
+    def count_nodes(self, node: Node):
         cypher = f"match (n:{node.cypher_labels}) return count(n) as num"
-        return self.session.run(cypher).data()[0]['num']
+        return self.session.run(cypher).data()[0]["num"]
 
-    def count_edges(self, edge:Edge):
+    def count_edges(self, edge: Edge):
         cypher = f"match ()-[r:{edge.cypher_labels}]->() return count(r) as num"
-        return self.session.run(cypher).data()[0]['num']
+        return self.session.run(cypher).data()[0]["num"]
 
+    def exec_large_cypher(
+        self, cypher: Union[str, list[str]], cypher_file_path="temp_cypher.txt"
+    ):
+        if isinstance(cypher, list):
+            cypher = " ".join(cypher) + ";"
+
+        with open(cypher_file_path, "w") as cypher_file:
+            cypher_file.write(cypher)
+
+        if os.path.exists(cypher_file_path):
+            address = "bolt+s://" + self._uri.split("://")[-1]
+            command = f"cat {cypher_file_path} | cypher-shell -u {self._user} -p {self._password} -a {address} -d {self._database} --format plain"
+            print(command)
+            output = os.popen(command).read()
+            # os.remove(cypher_file_path)
+            return command
