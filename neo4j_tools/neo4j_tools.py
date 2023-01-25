@@ -2,18 +2,15 @@
 # import libs and load config
 import os
 from neo4j import basic_auth, AsyncGraphDatabase, GraphDatabase
-import neo4j
 import json
 import pandas as pd
 from typing import Optional, List, Dict, Iterable, Union, Any
-from pydantic import BaseModel
 
 # from sqlalchemy import create_engine
 import pandas as pd
 
 # import pymysql
 import configparser
-from graphviz import Digraph
 from tqdm import tqdm
 from collections import namedtuple
 
@@ -23,26 +20,21 @@ import re
 from typing_extensions import LiteralString
 from neo4j_tools import defaults
 
-config = configparser.ConfigParser()
-config.read(defaults.config_file_path)
+Config = namedtuple(
+        "Config", ["uri", "user", "password", "import_folder", "database"]
+    )
 
-# set database
-# mysql_user = config['MYSQL']['user']
-# mysql_passwd = config['MYSQL']['password']
-# mysql_host = config['MYSQL']['host']
-# mysql_database = config['MYSQL']['database']
-# print('Default MySQL database:', mysql_database)
+def get_config(config_file_path) -> Config:
+    config = configparser.ConfigParser()
+    config.read(defaults.config_file_path)
+    return Config(
+        config["NEO4J"]["uri"],
+        config["NEO4J"]["user"],
+        config["NEO4J"]["password"],
+        config["NEO4J"].get("import_folder", None),
+        config["NEO4J"].get("database", None),
+    )
 
-neo4j_uri = config["NEO4J"]["uri"]
-neo4j_user = config["NEO4J"]["user"]
-neo4j_password = config["NEO4J"]["password"]
-neo4j_import_folder = config["NEO4J"].get("import_folder", None)
-neo4j_database = config["NEO4J"].get("database", None)
-
-# engine = create_engine(f'mysql+pymysql://{mysql_user}:{mysql_passwd}@{mysql_host}/{mysql_database}?charset=utf8mb4')
-
-# conn = pymysql.connect(user=mysql_user, passwd=mysql_passwd, host=mysql_host, database=mysql_database)
-# dict_cursor = conn.cursor(cursors.DictCursor)
 
 Relationship = namedtuple("Relationship", ["subj_id", "edge_id", "obj_id"])
 
@@ -124,28 +116,64 @@ py_neo_cast_map = {
 class Db:
     def __init__(
         self,
-        password=neo4j_password,
-        uri=neo4j_uri,
-        user=neo4j_user,
-        database=neo4j_database,
-        neo4j_import_folder=neo4j_import_folder,
+        config_file=defaults.config_file_path,
     ):
-        self._uri = uri
-        self._user = user
-        self._password = password
-        self._database = database
+        self.__config: Config = get_config(config_file)
         self.driver = GraphDatabase.driver(
-            uri, auth=(user, password), database=database
+            self.__config.uri, auth=(self.__config.user, self.__config.password), database=self.__config.database
         )
         self.session = self.driver.session()
-        self.import_folder = neo4j_import_folder
 
     def __str__(self):
-        return f"<neo4j_tools:Db {{user:{self._user}, database:{self._database}, uri: {self._uri} }}>"
+        return f"<neo4j_tools:Db {{user:{self.__config.user}, database:{self.__config.database}, uri: {self.__config.uri} }}>"
 
     def exec_data(self, cypher: LiteralString):
         r = self.session.run(cypher)
         return r.data()
+
+    def import_owl(
+        self,
+        url: str,
+        classLabel: str = "Class",
+        subClassOfRel: str = "SCO",
+        dataTypePropertyLabel: str = "Property",
+        objectPropertyLabel: str = "Relationship",
+        subPropertyOfRel: str = "SPO",
+        domainRel: str = "DOMAIN",
+        rangeRel: str = "RANGE",
+    ):
+        """Import OWL file into Neo4J
+
+        Parameters
+        ----------
+        url : str
+            URL of OWL file
+        classLabel : str, optional
+            Label to be used for Ontology Classes (categories), by default "Class"
+        subClassOfRel : str, optional
+            Relationship to be used for rdfs:subClassOf hierarchies, by default "SCO"
+        dataTypePropertyLabel : str, optional
+            Label to be used for DataType properties in the Ontology, by default "Property"
+        objectPropertyLabel : str, optional
+            Label to be used for Object properties in the Ontology, by default "Relationship"
+        subPropertyOfRel : str, optional
+            Relationship to be used for rdfs:subPropertyOf hierarchies, by default "SPO"
+        domainRel : str, optional
+            Relationship to be used for rdfs:domain, by default "DOMAIN"
+        rangeRel : str, optional
+            Relationship to be used for rdfs:range, by default "RANGE"
+        """
+        config = {
+            "classLabel": classLabel,
+            "subClassOfRel": subClassOfRel,
+            "dataTypePropertyLabel": dataTypePropertyLabel,
+            "objectPropertyLabel": objectPropertyLabel,
+            "subPropertyOfRel": subPropertyOfRel,
+            "domainRel": domainRel,
+            "rangeRel": rangeRel,
+        }
+        config_str = json.dumps(config)
+        self.session.run(f'CALL n10s.onto.import.fetch("{url}","Turtle")')
 
     def exec_df(self, cypher: LiteralString):
         data = self.exec_data(cypher)
@@ -297,8 +325,8 @@ class Db:
         self.recreate_database()
 
     def recreate_database(self):
-        self.session.run(f"DROP DATABASE {self._database}")
-        self.session.run(f"CREATE DATABASE {self._database}")
+        self.session.run(f"DROP DATABASE {self.__config.database}")
+        self.session.run(f"CREATE DATABASE {self.__config.database}")
 
     def delete_all(self) -> int:
         """Delete all nodes and relationships from the database."""
@@ -306,17 +334,19 @@ class Db:
             "MATCH (n) DETACH DELETE n return count(n) AS num"
         ).data()[0]["num"]
 
-    def delete_all_if_many(self, node:Optional[Node]=None):
+    def delete_all_if_many(self, node: Optional[Node] = None):
         """Use this method if many node has to be deleted."""
         if node:
-            where = node.get_where('n')
-            cypher_where = f" WHERE {where}" if where else ''
+            where = node.get_where("n")
+            cypher_where = f" WHERE {where}" if where else ""
             cypher = f"""MATCH (n:{node.cypher_labels}) {cypher_where}
                 CALL {{ WITH n
                     DETACH DELETE n
                 }} IN TRANSACTIONS OF 10000 ROWS"""
         else:
-            cypher = "MATCH (n) CALL { WITH n DETACH DELETE n} IN TRANSACTIONS OF 10000 ROWS"
+            cypher = (
+                "MATCH (n) CALL { WITH n DETACH DELETE n} IN TRANSACTIONS OF 10000 ROWS"
+            )
         return self.session.run(cypher)
 
     def delete_nodes_with_no_edges(self, node: Node):
@@ -406,7 +436,7 @@ class Db:
         """Load nodes from CSV file."""
 
         import_file = "import_file.csv"
-        sym_link = self.import_folder + import_file
+        sym_link = self.__config.import_folder + import_file
 
         if os.path.exists(sym_link):
             os.remove(sym_link)
@@ -458,7 +488,9 @@ class Db:
                 cypher = f"CREATE {nodes}"
                 self.session.run(cypher)
 
-    def create_node_index(self, label: str, prop_name: str, index_name: Optional[str]=''):
+    def create_node_index(
+        self, label: str, prop_name: str, index_name: Optional[str] = ""
+    ):
         cypher = f"CREATE INDEX {index_name} IF NOT EXISTS FOR (p:{label}) ON (p.{prop_name})"
         return self.session.run(cypher)
 
@@ -546,9 +578,9 @@ class Db:
             cypher_file.write(cypher)
 
         if os.path.exists(cypher_file_path):
-            address = "bolt+s://" + self._uri.split("://")[-1]
-            command = f"cat {cypher_file_path} | cypher-shell -u {self._user} -p {self._password} -a {address} -d {self._database} --format plain"
-            print(command)
+            address = "bolt+s://" + self.__config.uri.split("://")[-1]
+            command = f"cat {cypher_file_path} | cypher-shell -u {self.__config.user} -p {self.__config.password} -a {address} -d {self.__config.database} --format plain"
+            #print(command)
             output = os.popen(command).read()
-            # os.remove(cypher_file_path)
+            os.remove(cypher_file_path)
             return command
