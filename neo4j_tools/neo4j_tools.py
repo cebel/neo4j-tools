@@ -1,6 +1,7 @@
 """Main module."""
 # import libs and load config
 import os
+import logging
 from neo4j import basic_auth, AsyncGraphDatabase, GraphDatabase
 import json
 import pandas as pd
@@ -24,9 +25,16 @@ Config = namedtuple(
         "Config", ["uri", "user", "password", "import_folder", "database"]
     )
 
-def get_config(config_file_path) -> Config:
+def get_config(config_file_path: str) -> Config:
+    file_path = None
+    if os.path.exists(config_file_path):
+        file_path = config_file_path
+    else:
+        # shortcut used
+        file_path = os.path.join(defaults.PROJECT_DIR,f'config.{config_file_path}.ini')
+
     config = configparser.ConfigParser()
-    config.read(defaults.config_file_path)
+    config.read(file_path)
     return Config(
         config["NEO4J"]["uri"],
         config["NEO4J"]["user"],
@@ -118,7 +126,8 @@ class Db:
         self,
         config_file=defaults.config_file_path,
     ):
-        self.__config: Config = get_config(config_file)
+        print(config_file)
+        self.__config = get_config(config_file)
         self.driver = GraphDatabase.driver(
             self.__config.uri, auth=(self.__config.user, self.__config.password), database=self.__config.database
         )
@@ -144,6 +153,9 @@ class Db:
     ):
         """Import OWL file into Neo4J
 
+        Make sure that you have moved labs/apoc-4.4.0.8-core.jar to plugins/
+        https://neo4j.com/labs/apoc/4.4/installation/
+
         Parameters
         ----------
         url : str
@@ -163,17 +175,20 @@ class Db:
         rangeRel : str, optional
             Relationship to be used for rdfs:range, by default "RANGE"
         """
-        config = {
-            "classLabel": classLabel,
-            "subClassOfRel": subClassOfRel,
-            "dataTypePropertyLabel": dataTypePropertyLabel,
-            "objectPropertyLabel": objectPropertyLabel,
-            "subPropertyOfRel": subPropertyOfRel,
-            "domainRel": domainRel,
-            "rangeRel": rangeRel,
-        }
-        config_str = json.dumps(config)
-        self.session.run(f'CALL n10s.onto.import.fetch("{url}","Turtle")')
+        config = f"""{{
+            classLabel: '{classLabel}',
+            subClassOfRel: '{subClassOfRel}',
+            dataTypePropertyLabel: '{dataTypePropertyLabel}',
+            objectPropertyLabel: '{objectPropertyLabel}',
+            subPropertyOfRel: '{subPropertyOfRel}',
+            domainRel: '{domainRel}',
+            rangeRel: '{rangeRel}'
+        }}"""
+        #self.session.run('CREATE CONSTRAINT n10s_unique_uri FOR (r:Resource) REQUIRE r.uri IS UNIQUE')
+        self.session.run('call n10s.graphconfig.init()')
+        cypher = f'CALL n10s.onto.import.fetch("{url}","Turtle", {config})'
+        print(cypher)
+        return self.session.run(cypher).data()
 
     def exec_df(self, cypher: LiteralString):
         data = self.exec_data(cypher)
