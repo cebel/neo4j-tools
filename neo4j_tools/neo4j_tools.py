@@ -22,8 +22,9 @@ from typing_extensions import LiteralString
 from neo4j_tools import defaults
 
 Config = namedtuple(
-        "Config", ["uri", "user", "password", "import_folder", "database"]
-    )
+    "Config", ["uri", "user", "password", "import_folder", "database"]
+)
+
 
 def get_config(config_file_path: str) -> Config:
     file_path = None
@@ -31,7 +32,8 @@ def get_config(config_file_path: str) -> Config:
         file_path = config_file_path
     else:
         # shortcut used
-        file_path = os.path.join(defaults.PROJECT_DIR,f'config.{config_file_path}.ini')
+        file_path = os.path.join(defaults.PROJECT_DIR,
+                                 f'config.{config_file_path}.ini')
 
     config = configparser.ConfigParser()
     config.read(file_path)
@@ -129,12 +131,36 @@ class Db:
         print(config_file)
         self.__config = get_config(config_file)
         self.driver = GraphDatabase.driver(
-            self.__config.uri, auth=(self.__config.user, self.__config.password), database=self.__config.database
+            self.__config.uri, auth=(
+                self.__config.user, self.__config.password), database=self.__config.database
         )
         self.session = self.driver.session()
 
     def __str__(self):
         return f"<neo4j_tools:Db {{user:{self.__config.user}, database:{self.__config.database}, uri: {self.__config.uri} }}>"
+
+    def graphconfig_init(self):
+        self.session.run("CALL n10s.graphconfig.init()")
+
+    def graphconfig_set(self,
+                   keepLangTag: bool = True,
+                   handleMultival: str = 'ARRAY',
+                   multivalPropList: List[str] = [],
+                   handleVocabUris: str = "IGNORE"):
+        cypher_graphconfig = f"""CALL n10s.graphconfig.set({{
+            keepLangTag: {json.dumps(keepLangTag)},
+            handleMultival: "{handleMultival}",
+            multivalPropList : {json.dumps(multivalPropList)},
+            handleVocabUris: "{handleVocabUris}"
+            }})"""
+        self.session.run(cypher_graphconfig)
+
+    def import_ttl(self, local_path_to_file: str):      
+        self.session.run(
+            "CREATE CONSTRAINT n10s_unique_uri IF NOT EXISTS FOR (r:Resource) REQUIRE r.uri IS UNIQUE")
+
+        cypher_import = f'CALL n10s.rdf.import.fetch("file://{local_path_to_file}","Turtle")'
+        self.session.run(cypher_import)
 
     def exec_data(self, cypher: LiteralString):
         r = self.session.run(cypher)
@@ -184,7 +210,7 @@ class Db:
             domainRel: '{domainRel}',
             rangeRel: '{rangeRel}'
         }}"""
-        #self.session.run('CREATE CONSTRAINT n10s_unique_uri FOR (r:Resource) REQUIRE r.uri IS UNIQUE')
+        # self.session.run('CREATE CONSTRAINT n10s_unique_uri FOR (r:Resource) REQUIRE r.uri IS UNIQUE')
         self.session.run('call n10s.graphconfig.init()')
         cypher = f'CALL n10s.onto.import.fetch("{url}","Turtle", {config})'
         print(cypher)
@@ -238,7 +264,8 @@ class Db:
 
     def __get_where_part_by_props(self, node_name: str, props: dict):
         return " AND ".join(
-            [f"{node_name}.{k} = {self.__get_sql_value(v)}" for k, v in props.items()]
+            [f"{node_name}.{k} = {self.__get_sql_value(v)}" for k, v in props.items(
+            )]
         )
 
     def create_edge(self, subj: Node, edge: Edge, obj: Node):
@@ -473,7 +500,8 @@ class Db:
         import_cols = ""
         if use_cols != None:
             import_cols = (
-                "{" + ", ".join([f"{x.lower()}: line.{x}" for x in use_cols]) + "}"
+                "{" +
+                ", ".join([f"{x.lower()}: line.{x}" for x in use_cols]) + "}"
             )
 
         cypher = f"""LOAD CSV WITH HEADERS FROM
@@ -484,7 +512,7 @@ class Db:
 
     def __get_chunks(self, list_a, chunk_size=1000):
         for i in range(0, len(list_a), chunk_size):
-            yield list_a[i : i + chunk_size]
+            yield list_a[i: i + chunk_size]
 
     def import_nodes_from_mysql(
         self, label, dict_cursor, sql, database="", merge=False
@@ -595,7 +623,7 @@ class Db:
         if os.path.exists(cypher_file_path):
             address = "bolt+s://" + self.__config.uri.split("://")[-1]
             command = f"cat {cypher_file_path} | cypher-shell -u {self.__config.user} -p {self.__config.password} -a {address} -d {self.__config.database} --format plain"
-            #print(command)
+            # print(command)
             output = os.popen(command).read()
             os.remove(cypher_file_path)
             return command
