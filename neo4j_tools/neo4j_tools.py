@@ -128,7 +128,6 @@ class Db:
         self,
         config_file=defaults.config_file_path,
     ):
-        print(config_file)
         self.__config = get_config(config_file)
         self.driver = GraphDatabase.driver(
             self.__config.uri, auth=(
