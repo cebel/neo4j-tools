@@ -154,11 +154,32 @@ class Db:
             }})"""
         self.session.run(cypher_graphconfig)
 
-    def import_ttl(self, local_path_to_file: str):      
-        self.session.run(
-            "CREATE CONSTRAINT n10s_unique_uri IF NOT EXISTS FOR (r:Resource) REQUIRE r.uri IS UNIQUE")
+    def import_ttl(self, path_or_uri: str):      
+        """_summary_
 
-        cypher_import = f'CALL n10s.rdf.import.fetch("file://{local_path_to_file}","Turtle")'
+        Parameters
+        ----------
+        path_or_uri : str
+            File path or URL
+
+        Raises
+        ------
+        FileNotFoundError
+            _description_
+        """
+        is_file_path = path_or_uri.startswith('/')
+
+        if is_file_path:
+            uri = f"file://{path_or_uri}"
+            if not os.path.exists(path_or_uri):
+                raise FileNotFoundError(f'Not able to file {path_or_uri} in path.')
+        else:
+            uri = path_or_uri
+
+        self.session.run("CREATE CONSTRAINT n10s_unique_uri IF NOT EXISTS FOR (r:Resource) REQUIRE r.uri IS UNIQUE")
+        
+        
+        cypher_import = f'CALL n10s.rdf.import.fetch("{uri}","Turtle")'
         self.session.run(cypher_import)
 
     def exec_data(self, cypher: LiteralString):
