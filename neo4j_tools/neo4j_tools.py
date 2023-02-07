@@ -1,6 +1,7 @@
 """Main module."""
 # import libs and load config
 import os
+import warnings
 import logging
 from neo4j import basic_auth, AsyncGraphDatabase, GraphDatabase
 import json
@@ -392,24 +393,42 @@ class Db:
 
     def delete_all(self) -> int:
         """Delete all nodes and relationships from the database."""
+        warnings.warn("deprecated, because of Neo4J memory overflow, used instead `delete_all_nodes`", DeprecationWarning)
+        # TODO: Deleted in version 1.0
         return self.session.run(
             "MATCH (n) DETACH DELETE n return count(n) AS num"
         ).data()[0]["num"]
 
-    def delete_all_if_many(self, node: Optional[Node] = None):
-        """Use this method if many node has to be deleted."""
+    def delete_all_nodes(self, node: Optional[Node] = None, transition_size = 10000):
+        """Delete all nodes and relationships from the database.
+
+        Parameters
+        ----------
+        node : Optional[Node], optional
+            Use the Node class to specify the Node type (including properties), by default None
+        transition_size : int, optional
+            Number of node and edges deleted in one transaction, by default 10000
+        """        """"""
+        
         if node:
             where = node.get_where("n")
             cypher_where = f" WHERE {where}" if where else ""
-            cypher = f"""MATCH (n:{node.cypher_labels}) {cypher_where}
+            cypher_edges = """MATCH (n:{node.cypher_labels})-[r]-() {cypher_where}
+                CALL {{ WITH r
+                    DELETE r
+                }} IN TRANSACTIONS OF {transition_size} ROWS"""
+            cypher_nodes = f"""MATCH (n:{node.cypher_labels}) {cypher_where}
                 CALL {{ WITH n
                     DETACH DELETE n
-                }} IN TRANSACTIONS OF 10000 ROWS"""
+                }} IN TRANSACTIONS OF {transition_size} ROWS"""
         else:
-            cypher = (
-                "MATCH (n) CALL { WITH n DETACH DELETE n} IN TRANSACTIONS OF 10000 ROWS"
-            )
-        return self.session.run(cypher)
+            cypher_edges = f"MATCH (n)-[r]-() CALL {{ WITH r DELETE r }} IN TRANSACTIONS OF {transition_size} ROWS"
+            cypher_nodes = f"MATCH (n) CALL {{ WITH n DETACH DELETE n}} IN TRANSACTIONS OF {transition_size} ROWS"
+
+        self.session.run(cypher_edges)
+        self.session.run(cypher_nodes)
+
+        return 
 
     def delete_nodes_with_no_edges(self, node: Node):
         cypher_where = ""
