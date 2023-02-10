@@ -157,6 +157,11 @@ class Db:
             }})"""
         self.session.run(cypher_graphconfig)
 
+    @property
+    def schema(self):
+        """Get the database schema."""
+        return self.session.run("CALL db.schema.visualization()").data()
+
     def import_ttl(self, path_or_uri: str):      
         """_summary_
 
