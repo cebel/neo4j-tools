@@ -128,16 +128,18 @@ class Db:
     def __init__(
         self,
         config_file=defaults.config_file_path,
+        database:Optional[str] = None
     ):
         self.__config = get_config(config_file)
+        self.database = database if database else self.__config.database
         self.driver = GraphDatabase.driver(
             self.__config.uri, auth=(
-                self.__config.user, self.__config.password), database=self.__config.database
+                self.__config.user, self.__config.password), database=self.database
         )
         self.session = self.driver.session()
 
     def __str__(self):
-        return f"<neo4j_tools:Db {{user:{self.__config.user}, database:{self.__config.database}, uri: {self.__config.uri} }}>"
+        return f"<neo4j_tools:Db {{user:{self.__config.user}, database:{self.database}, uri: {self.__config.uri} }}>"
 
     def graphconfig_init(self):
         self.session.run("CALL n10s.graphconfig.init()")
@@ -388,8 +390,8 @@ class Db:
         self.recreate_database()
 
     def recreate_database(self):
-        self.session.run(f"DROP DATABASE {self.__config.database}")
-        self.session.run(f"CREATE DATABASE {self.__config.database}")
+        self.session.run(f"DROP DATABASE {self.database}")
+        self.session.run(f"CREATE DATABASE {self.database}")
 
     def delete_all(self) -> int:
         """Delete all nodes and relationships from the database."""
@@ -661,7 +663,7 @@ class Db:
 
         if os.path.exists(cypher_file_path):
             address = "bolt+s://" + self.__config.uri.split("://")[-1]
-            command = f"cat {cypher_file_path} | cypher-shell -u {self.__config.user} -p {self.__config.password} -a {address} -d {self.__config.database} --format plain"
+            command = f"cat {cypher_file_path} | cypher-shell -u {self.__config.user} -p {self.__config.password} -a {address} -d {self.database} --format plain"
             # print(command)
             output = os.popen(command).read()
             os.remove(cypher_file_path)
