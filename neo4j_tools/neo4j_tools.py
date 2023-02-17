@@ -141,6 +141,13 @@ class Db:
     def __str__(self):
         return f"<neo4j_tools:Db {{user:{self.__config.user}, database:{self.database}, uri: {self.__config.uri} }}>"
 
+    def show_databases(self):
+        return self.exec_data("SHOW DATABASES")
+
+    @property
+    def databases(self):
+        return [x['name'] for x in self.show_databases() if x['type']=='standard']
+
     def graphconfig_init(self):
         self.session.run("CALL n10s.graphconfig.init()")
 
