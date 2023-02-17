@@ -16,3 +16,5 @@ sqlalchemy==1.4.42
 pymysql==1.0.2
 neo4j==5.2.0
 graphviz==0.20.1
+networkx==3.0
+pygraphviz==1.10
