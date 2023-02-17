@@ -7,6 +7,7 @@ from neo4j import basic_auth, AsyncGraphDatabase, GraphDatabase
 import json
 import pandas as pd
 from typing import Optional, List, Dict, Iterable, Union, Any
+import networkx as nx
 
 # from sqlalchemy import create_engine
 import pandas as pd
@@ -172,6 +173,14 @@ class Db:
     def schema(self):
         """Get the database schema."""
         return self.session.run("CALL db.schema.visualization()").data()
+
+    def show_schema_in_ipynb(self):
+        from IPython.core.display import SVG, display
+        graph = nx.DiGraph()
+        graph.add_edges_from([(1, 2, {'color': 'blue'}), (2, 3, {'weight': 8})])
+        svg = nx.nx_agraph.to_agraph(graph).draw(prog='dot',format='svg')
+        display(SVG(svg))
+
 
     def import_ttl(self, path_or_uri: str):      
         """_summary_

@@ -4,3 +4,5 @@ pandas
 neo4j
 graphviz
 pydantic
+networkx
+pygraphviz
