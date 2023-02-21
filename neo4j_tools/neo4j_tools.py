@@ -142,18 +142,29 @@ class Db:
     def __str__(self):
         return f"<neo4j_tools:Db {{user:{self.__config.user}, database:{self.database}, uri: {self.__config.uri} }}>"
 
+    def show_databases(self):
+        return self.exec_data("SHOW DATABASES")
+
+    @property
+    def databases(self):
+        return [x['name'] for x in self.show_databases() if x['type']=='standard']
+
     def graphconfig_init(self):
         self.session.run("CALL n10s.graphconfig.init()")
 
     def graphconfig_set(self,
                    keepLangTag: bool = True,
-                   handleMultival: str = 'ARRAY',
-                   multivalPropList: List[str] = [],
+                   handleMultival: Optional[str] = 'ARRAY',
+                   multivalPropList: Optional[List[str]] = [],
                    handleVocabUris: str = "IGNORE"):
+
+        handleMultival_cypher = f'handleMultival: "{handleMultival}",' if handleMultival else ''
+        multivalPropList_cypher = f"multivalPropList : {json.dumps(multivalPropList)}," if multivalPropList else ''
+
         cypher_graphconfig = f"""CALL n10s.graphconfig.set({{
             keepLangTag: {json.dumps(keepLangTag)},
-            handleMultival: "{handleMultival}",
-            multivalPropList : {json.dumps(multivalPropList)},
+            {handleMultival_cypher}
+            {multivalPropList_cypher}
             handleVocabUris: "{handleVocabUris}"
             }})"""
         self.session.run(cypher_graphconfig)
@@ -421,8 +432,14 @@ class Db:
         self.recreate_database()
 
     def recreate_database(self):
-        self.session.run(f"DROP DATABASE {self.database}")
+        self.session.run(f"DROP DATABASE {self.database} IF EXISTS")
         self.session.run(f"CREATE DATABASE {self.database}")
+
+    def create_database(self):
+        self.session.run(f"CREATE DATABASE {self.database} IF NOT EXISTS")
+
+    def drop_database(self):
+        self.session.run(f"DROP DATABASE {self.database} IF EXISTS")
 
     def delete_all(self) -> int:
         """Delete all nodes and relationships from the database."""
@@ -604,8 +621,10 @@ class Db:
                 self.session.run(cypher)
 
     def create_node_index(
-        self, label: str, prop_name: str, index_name: Optional[str] = ""
+        self, label: str, prop_name: str, index_name: Optional[str] = None
     ):
+        if index_name is None:
+            index_name = f"ix_{label}__{prop_name}"
         cypher = f"CREATE INDEX {index_name} IF NOT EXISTS FOR (p:{label}) ON (p.{prop_name})"
         return self.session.run(cypher)
 
