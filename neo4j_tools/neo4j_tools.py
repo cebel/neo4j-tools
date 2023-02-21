@@ -517,12 +517,27 @@ class Db:
         if node:
             where_str = node.get_where("n")
             where = f" WHERE {where_str}" if where_str else ""
-            label = f":{node.cypher_labels}"
+            label = f":`{node.cypher_labels}`"
         cypher = f"MATCH (n{label}) {where} RETURN count(n) AS num" ""
         return self.session.run(cypher).data()[0]["num"]
 
     def node_labels_with_no_relationships(self):
         self.session.run("match ")
+
+    def get_node_label_statistics(self):
+        data = []
+        for label in self.node_labels:
+            data.append((label, self.get_number_of_nodes(node=Node(label))))
+        df = pd.DataFrame(data, columns=['label', 'number_of_nodes'])
+        return df.set_index('label').sort_values(by=['number_of_nodes'], ascending=False)
+
+
+    def get_relationship_type_statistics(self):
+        data = []
+        for r_type in self.relationship_types:
+            data.append((r_type, self.get_number_of_edges(edge=Edge(r_type))))
+        df = pd.DataFrame(data, columns=['type', 'number_of_relationships'])
+        return df.set_index('type').sort_values(by=['number_of_relationships'], ascending=False)
 
     def get_label_statistics(self):
         data = []
@@ -531,12 +546,13 @@ class Db:
         df = pd.DataFrame(data, columns=['label', 'number_of_nodes'])
         return df.set_index('label').sort_values(by=['number_of_nodes'], ascending=False)
 
+
     def get_number_of_edges(self, edge: Optional[Edge] = None) -> int:
         where, label = "", ""
         if edge:
             where_str = edge.get_where("e")
             where = f" WHERE {where_str}" if where_str else ""
-            label = f":{edge.cypher_labels}"
+            label = f":`{edge.cypher_labels}`"
         cypher = f"MATCH ()-[e{label}]->() {where} RETURN count(e) AS num" ""
         return self.session.run(cypher).data()[0]["num"]
 
