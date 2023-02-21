@@ -23,6 +23,8 @@ import re
 from typing_extensions import LiteralString
 from neo4j_tools import defaults
 
+from IPython.core.display import SVG, display, Image
+
 Config = namedtuple(
     "Config", ["uri", "user", "password", "import_folder", "database"]
 )
@@ -129,7 +131,7 @@ class Db:
     def __init__(
         self,
         config_file=defaults.config_file_path,
-        database:Optional[str] = None
+        database: Optional[str] = None
     ):
         self.__config = get_config(config_file)
         self.database = database if database else self.__config.database
@@ -147,16 +149,16 @@ class Db:
 
     @property
     def databases(self):
-        return [x['name'] for x in self.show_databases() if x['type']=='standard']
+        return [x['name'] for x in self.show_databases() if x['type'] == 'standard']
 
     def graphconfig_init(self):
         self.session.run("CALL n10s.graphconfig.init()")
 
     def graphconfig_set(self,
-                   keepLangTag: bool = True,
-                   handleMultival: Optional[str] = 'ARRAY',
-                   multivalPropList: Optional[List[str]] = [],
-                   handleVocabUris: str = "IGNORE"):
+                        keepLangTag: bool = True,
+                        handleMultival: Optional[str] = 'ARRAY',
+                        multivalPropList: Optional[List[str]] = [],
+                        handleVocabUris: str = "IGNORE"):
 
         handleMultival_cypher = f'handleMultival: "{handleMultival}",' if handleMultival else ''
         multivalPropList_cypher = f"multivalPropList : {json.dumps(multivalPropList)}," if multivalPropList else ''
@@ -182,24 +184,35 @@ class Db:
     @property
     def relationships_schema_as_df(self):
         """Get the database schema."""
-        return pd.DataFrame([{'subject':x[0]['name'],'name': x[1], 'object': x[2]['name'] } for x in self.schema[0]['relationships']])
-
+        return pd.DataFrame([{'subject': x[0]['name'], 'name': x[1], 'object': x[2]['name']} for x in self.schema[0]['relationships']])
 
     @property
     def database_names(self):
         """All databases except system."""
-        return [x['name'] for x in self.exec_data("SHOW DATABASES") if x['name']!='system']
+        return [x['name'] for x in self.exec_data("SHOW DATABASES") if x['name'] != 'system']
 
-    def show_schema_in_ipynb(self):
-        from IPython.core.display import SVG, display
+    def show_schema_in_ipynb(self, format='jpg'):
+        """Shows the database schema as dot in `jpg` or `svg` format
+
+        Note: svg not works in GitHub preview of notebook
+
+        Parameters
+        ----------
+        format : str, optional
+            format of the picture, by default 'jpg', alternative 'svg'
+        """
         graph = nx.DiGraph()
-        edges = [(x[0]['name'],x[2]['name'], {'label': x[1]}) for x in self.schema[0]['relationships']]
+        edges = [(x[0]['name'], x[2]['name'], {'label': x[1]})
+                 for x in self.schema[0]['relationships']]
         graph.add_edges_from(edges)
-        svg = nx.nx_agraph.to_agraph(graph).draw(prog='dot',format='svg')
-        display(SVG(svg))
+        if format == 'svg':
+            svg = nx.nx_agraph.to_agraph(graph).draw(prog='dot', format='svg')
+            return SVG(svg)
+        elif format == 'jpg':
+            img = nx.nx_agraph.to_agraph(graph).draw(prog='dot', format='jpg')
+            return Image(img)
 
-
-    def import_ttl(self, path_or_uri: str):      
+    def import_ttl(self, path_or_uri: str):
         """_summary_
 
         Parameters
@@ -217,13 +230,14 @@ class Db:
         if is_file_path:
             uri = f"file://{path_or_uri}"
             if not os.path.exists(path_or_uri):
-                raise FileNotFoundError(f'Not able to file {path_or_uri} in path.')
+                raise FileNotFoundError(
+                    f'Not able to file {path_or_uri} in path.')
         else:
             uri = path_or_uri
 
-        self.session.run("CREATE CONSTRAINT n10s_unique_uri IF NOT EXISTS FOR (r:Resource) REQUIRE r.uri IS UNIQUE")
-        
-        
+        self.session.run(
+            "CREATE CONSTRAINT n10s_unique_uri IF NOT EXISTS FOR (r:Resource) REQUIRE r.uri IS UNIQUE")
+
         cypher_import = f'CALL n10s.rdf.import.fetch("{uri}","Turtle")'
         self.session.run(cypher_import)
 
@@ -443,13 +457,14 @@ class Db:
 
     def delete_all(self) -> int:
         """Delete all nodes and relationships from the database."""
-        warnings.warn("deprecated, because of Neo4J memory overflow, used instead `delete_all_nodes`", DeprecationWarning)
+        warnings.warn(
+            "deprecated, because of Neo4J memory overflow, used instead `delete_all_nodes`", DeprecationWarning)
         # TODO: Deleted in version 1.0
         return self.session.run(
             "MATCH (n) DETACH DELETE n return count(n) AS num"
         ).data()[0]["num"]
 
-    def delete_all_nodes(self, node: Optional[Node] = None, transition_size = 10000):
+    def delete_all_nodes(self, node: Optional[Node] = None, transition_size=10000):
         """Delete all nodes and relationships from the database.
 
         Parameters
@@ -459,7 +474,7 @@ class Db:
         transition_size : int, optional
             Number of node and edges deleted in one transaction, by default 10000
         """        """"""
-        
+
         if node:
             where = node.get_where("n")
             cypher_where = f" WHERE {where}" if where else ""
@@ -478,7 +493,7 @@ class Db:
         self.session.run(cypher_edges)
         self.session.run(cypher_nodes)
 
-        return 
+        return
 
     def delete_nodes_with_no_edges(self, node: Node):
         cypher_where = ""
@@ -505,6 +520,16 @@ class Db:
             label = f":{node.cypher_labels}"
         cypher = f"MATCH (n{label}) {where} RETURN count(n) AS num" ""
         return self.session.run(cypher).data()[0]["num"]
+
+    def node_labels_with_no_relationships(self):
+        self.session.run("match ")
+
+    def get_label_statistics(self):
+        data = []
+        for label in self.node_labels:
+            data.append((label, self.get_number_of_nodes(node=Node(label))))
+        df = pd.DataFrame(data, columns=['label', 'number_of_nodes'])
+        return df.set_index('label').sort_values(by=['number_of_nodes'], ascending=False)
 
     def get_number_of_edges(self, edge: Optional[Edge] = None) -> int:
         where, label = "", ""
@@ -552,7 +577,29 @@ class Db:
 
     def list_labels(self):
         """List all labels."""
+        return self.node_labels
+
+    @property
+    def node_labels(self) -> List[str]:
+        """Returns list of all node labels
+
+        Returns
+        -------
+        List[str]
+            List of all node labels
+        """
         return [x["label"] for x in self.exec_data("CALL db.labels() YIELD label")]
+
+    @property
+    def relationship_types(self) -> List[str]:
+        """Returns list of all edge/relationship types
+
+        Returns
+        -------
+        List[str]
+            List of all edge/relationship types
+        """
+        return [x['relationshipType'] for x in self.exec_data("CALL db.relationshipTypes")]
 
     def list_all_columns(self):
         return self.exec_data("CALL db.labels() YIELD *")
