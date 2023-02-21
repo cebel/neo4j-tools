@@ -163,10 +163,27 @@ class Db:
         """Get the database schema."""
         return self.session.run("CALL db.schema.visualization()").data()
 
+    @property
+    def nodes_schema_as_df(self):
+        """Get the database schema."""
+        return pd.DataFrame(self.schema[0]['nodes']).set_index('name')
+
+    @property
+    def relationships_schema_as_df(self):
+        """Get the database schema."""
+        return pd.DataFrame([{'subject':x[0]['name'],'name': x[1], 'object': x[2]['name'] } for x in self.schema[0]['relationships']])
+
+
+    @property
+    def database_names(self):
+        """All databases except system."""
+        return [x['name'] for x in self.exec_data("SHOW DATABASES") if x['name']!='system']
+
     def show_schema_in_ipynb(self):
         from IPython.core.display import SVG, display
         graph = nx.DiGraph()
-        graph.add_edges_from([(1, 2, {'color': 'blue'}), (2, 3, {'weight': 8})])
+        edges = [(x[0]['name'],x[2]['name'], {'label': x[1]}) for x in self.schema[0]['relationships']]
+        graph.add_edges_from(edges)
         svg = nx.nx_agraph.to_agraph(graph).draw(prog='dot',format='svg')
         display(SVG(svg))
 
