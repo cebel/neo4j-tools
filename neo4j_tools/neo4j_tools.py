@@ -8,6 +8,7 @@ import json
 import pandas as pd
 from typing import Optional, List, Dict, Iterable, Union, Any
 import networkx as nx
+from yfiles_jupyter_graphs import GraphWidget
 
 # from sqlalchemy import create_engine
 import pandas as pd
@@ -191,7 +192,7 @@ class Db:
         """All databases except system."""
         return [x['name'] for x in self.exec_data("SHOW DATABASES") if x['name'] != 'system']
 
-    def show_schema_in_ipynb(self, format='jpg'):
+    def show_schema_in_ipynb(self, format='jpg', interactive=False):
         """Shows the database schema as dot in `jpg` or `svg` format
 
         Note: svg not works in GitHub preview of notebook
@@ -201,16 +202,20 @@ class Db:
         format : str, optional
             format of the picture, by default 'jpg', alternative 'svg'
         """
-        graph = nx.DiGraph()
-        edges = [(x[0]['name'], x[2]['name'], {'label': x[1]})
-                 for x in self.schema[0]['relationships']]
-        graph.add_edges_from(edges)
-        if format == 'svg':
-            svg = nx.nx_agraph.to_agraph(graph).draw(prog='dot', format='svg')
-            return SVG(svg)
-        elif format == 'jpg':
-            img = nx.nx_agraph.to_agraph(graph).draw(prog='dot', format='jpg')
-            return Image(img)
+        if interactive:
+            cypher = "CALL db.schema.visualization()"
+            return self.show_graph_interactive(cypher)
+        else:
+            graph = nx.DiGraph()
+            edges = [(x[0]['name'], x[2]['name'], {'label': x[1]})
+                    for x in self.schema[0]['relationships']]
+            graph.add_edges_from(edges)
+            if format == 'svg':
+                svg = nx.nx_agraph.to_agraph(graph).draw(prog='dot', format='svg')
+                return SVG(svg)
+            elif format == 'jpg':
+                img = nx.nx_agraph.to_agraph(graph).draw(prog='dot', format='jpg')
+                return Image(img)
 
     def import_ttl(self, path_or_uri: str):
         """_summary_
@@ -309,6 +314,9 @@ class Db:
                     for x in data
                 ]
         return pd.DataFrame(data)
+    
+    def show_graph_interactive(self, cypher: LiteralString):
+        return GraphWidget(graph=self.session.run(cypher).graph())
 
     def close(self):
         self.driver.close()
