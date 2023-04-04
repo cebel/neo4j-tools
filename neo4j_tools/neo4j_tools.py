@@ -152,8 +152,25 @@ class Db:
     def databases(self):
         return [x['name'] for x in self.show_databases() if x['type'] == 'standard']
 
-    def graphconfig_init(self):
-        self.session.run("CALL n10s.graphconfig.init()")
+    def graph_config_init(self, keep_language_tag:bool = True, label_prefixes=False, multiple_values_for_namespace_uris = []):
+        configs = []
+        
+        if keep_language_tag:
+            configs.append("keepLangTag: true")
+        
+        if label_prefixes==False:
+            configs.append('handleVocabUris: "IGNORE"')
+        
+        if multiple_values_for_namespace_uris:
+            uris_str = ", ".join([f'"{x}"' for x in multiple_values_for_namespace_uris]) 
+            configs.append(f'multivalPropList: [{uris_str}]')
+
+        config_str = ''
+        if configs:
+            joined_configs = ", ".join(configs)
+            config_str = f'{{ {joined_configs} }}'
+
+        self.session.run(f"CALL n10s.graphconfig.init({config_str})")
 
     def graphconfig_set(self,
                         keepLangTag: bool = True,
@@ -217,7 +234,7 @@ class Db:
                 img = nx.nx_agraph.to_agraph(graph).draw(prog='dot', format='jpg')
                 return Image(img)
 
-    def import_ttl(self, path_or_uri: str):
+    def import_ttl(self, path_or_uri: str, init_graph_config=True):
         """_summary_
 
         Parameters
@@ -230,6 +247,9 @@ class Db:
         FileNotFoundError
             _description_
         """
+        if init_graph_config:
+            self.graph_config_init()
+
         is_file_path = path_or_uri.startswith('/')
 
         if is_file_path:
@@ -244,7 +264,8 @@ class Db:
             "CREATE CONSTRAINT n10s_unique_uri IF NOT EXISTS FOR (r:Resource) REQUIRE r.uri IS UNIQUE")
 
         cypher_import = f'CALL n10s.rdf.import.fetch("{uri}","Turtle")'
-        self.session.run(cypher_import)
+        print(cypher_import)
+        return self.session.run(cypher_import).data()
 
     def exec_data(self, cypher: LiteralString):
         r = self.session.run(cypher)
@@ -472,7 +493,7 @@ class Db:
             "MATCH (n) DETACH DELETE n return count(n) AS num"
         ).data()[0]["num"]
 
-    def delete_all_nodes(self, node: Optional[Node] = None, transition_size=10000, add_auto=True):
+    def delete_all_nodes(self, node: Optional[Node] = None, transition_size=10000, add_auto=False):
         """Delete all nodes and relationships from the database.
 
         Parameters
