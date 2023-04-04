@@ -472,7 +472,7 @@ class Db:
             "MATCH (n) DETACH DELETE n return count(n) AS num"
         ).data()[0]["num"]
 
-    def delete_all_nodes(self, node: Optional[Node] = None, transition_size=10000):
+    def delete_all_nodes(self, node: Optional[Node] = None, transition_size=10000, add_auto=True):
         """Delete all nodes and relationships from the database.
 
         Parameters
@@ -481,22 +481,25 @@ class Db:
             Use the Node class to specify the Node type (including properties), by default None
         transition_size : int, optional
             Number of node and edges deleted in one transaction, by default 10000
+        add_auto: bool
+            adds ':auto ' at the beginning of each Cypher query if 'True'[default]
         """        """"""
+        auto_str = ':auto ' if add_auto else ''
 
         if node:
             where = node.get_where("n")
             cypher_where = f" WHERE {where}" if where else ""
-            cypher_edges = """MATCH (n:{node.cypher_labels})-[r]-() {cypher_where}
+            cypher_edges = f"""{auto_str}MATCH (n:{node.cypher_labels})-[r]-() {cypher_where}
                 CALL {{ WITH r
                     DELETE r
                 }} IN TRANSACTIONS OF {transition_size} ROWS"""
-            cypher_nodes = f"""MATCH (n:{node.cypher_labels}) {cypher_where}
+            cypher_nodes = f"""{auto_str}MATCH (n:{node.cypher_labels}) {cypher_where}
                 CALL {{ WITH n
                     DETACH DELETE n
                 }} IN TRANSACTIONS OF {transition_size} ROWS"""
         else:
-            cypher_edges = f"MATCH (n)-[r]-() CALL {{ WITH r DELETE r }} IN TRANSACTIONS OF {transition_size} ROWS"
-            cypher_nodes = f"MATCH (n) CALL {{ WITH n DETACH DELETE n}} IN TRANSACTIONS OF {transition_size} ROWS"
+            cypher_edges = f"{auto_str}MATCH (n)-[r]-() CALL {{ WITH r DELETE r }} IN TRANSACTIONS OF {transition_size} ROWS"
+            cypher_nodes = f"{auto_str}MATCH (n) CALL {{ WITH n DETACH DELETE n}} IN TRANSACTIONS OF {transition_size} ROWS"
 
         self.session.run(cypher_edges)
         self.session.run(cypher_nodes)
