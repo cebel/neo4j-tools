@@ -109,3 +109,6 @@ ENV/
 .editorconfig
 .travis.yml
 test_notebooks/
+
+# test folders
+.local_tests
