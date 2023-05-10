@@ -264,7 +264,6 @@ class Db:
             "CREATE CONSTRAINT n10s_unique_uri IF NOT EXISTS FOR (r:Resource) REQUIRE r.uri IS UNIQUE")
 
         cypher_import = f'CALL n10s.rdf.import.fetch("{uri}","Turtle")'
-        print(cypher_import)
         return self.session.run(cypher_import).data()
 
     def exec_data(self, cypher: LiteralString):
