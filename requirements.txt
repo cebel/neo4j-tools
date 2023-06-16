@@ -2,8 +2,6 @@ Click
 tqdm
 pandas
 neo4j
-graphviz
 pydantic
 networkx
-pygraphviz
 yfiles_jupyter_graphs
