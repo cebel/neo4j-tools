@@ -15,7 +15,8 @@ requirements = [
     'tqdm==4.64.1',
     'pandas==1.5.1',
     'neo4j==5.2.0',
-    'networkx==3.0']
+    'networkx==3.0',
+    'yfiles-jupyter-graphs==1.4.5']
 
 test_requirements = ['pytest>=3', ]
 
