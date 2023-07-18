@@ -17,7 +17,8 @@ requirements = [
     'neo4j==5.2.0',
     'graphviz==0.20.1',
     'networkx==3.0',
-    'pygraphviz==1.10']
+    'pygraphviz==1.10',
+    'yfiles_jupyter_graphs==1.4.4']
 
 test_requirements = ['pytest>=3', ]
 
