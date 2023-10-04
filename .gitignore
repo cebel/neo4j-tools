@@ -112,3 +112,4 @@ test_notebooks/
 
 # test folders
 .local_tests
+.venv

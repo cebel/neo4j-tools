@@ -1,0 +1,35 @@
+[build-system]
+requires = ["poetry_core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "neo4j-tools"
+version = "0.1.1"
+authors = [
+  "Christian Ebeling <Christian.Ebeling@scai.fraunhofer.de>",
+]
+description = "A small example package"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent"
+]
+
+[tool.poetry.scripts]
+neo4j_tools = "neo4j_tools.cli:main"
+
+[tool.poetry.urls]
+"Homepage" = "https://github.com/pypa/sampleproject"
+"Bug Tracker" = "https://github.com/pypa/sampleproject/issues"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+click = "^7.1.2"
+tqdm = "^4.64.1"
+pandas = "^1.5.1"
+networkx = "^3.0.0"
+yfiles_jupyter_graphs = "^1.4.4"
+neo4j = "^5.2.0"
+typing_extensions = "~4.8.0"

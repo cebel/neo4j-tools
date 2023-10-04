@@ -4,7 +4,6 @@ import click
 from neo4j_tools import config
 import logging
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -15,11 +14,10 @@ def main():
     pass
 
 
-
 @main.command()
-@click.option('-u', '--user', help="User")
+@click.option('-u', '--user', default='neo4j', help="User")
 @click.option('-p', '--password', help="Password")
-@click.option('-d', '--database', default='', help="Database name")
+@click.option('-d', '--database', default='neo4j', help="Database name")
 @click.option('-s', '--server', default='localhost', help="Server name")
 @click.option('-o', '--port', default='7687', help="Server port")
 @click.option('-i', '--import_folder', default="/opt/neo4j/import/", help="Path to import folder")
@@ -33,7 +31,3 @@ def set_neo_config(user: str, password: str, database: str, server: str, port: s
         port=int(port),
         import_folder=import_folder
     )
-
-
-if __name__ == "__main__":
-    sys.exit(main())  # pragma: no cover
