@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "neo4j-tools"
-version = "0.1.1"
+version = "0.1.2"
 authors = [
   "Christian Ebeling <Christian.Ebeling@scai.fraunhofer.de>",
 ]
