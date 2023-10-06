@@ -26,9 +26,7 @@ from neo4j_tools import defaults
 
 from IPython.core.display import SVG, display, Image
 
-Config = namedtuple(
-    "Config", ["uri", "user", "password", "import_folder", "database"]
-)
+Config = namedtuple("Config", ["uri", "user", "password", "import_folder", "database"])
 
 
 def get_config(config_file_path: str) -> Config:
@@ -37,8 +35,7 @@ def get_config(config_file_path: str) -> Config:
         file_path = config_file_path
     else:
         # shortcut used
-        file_path = os.path.join(defaults.PROJECT_DIR,
-                                 f'config.{config_file_path}.ini')
+        file_path = os.path.join(defaults.PROJECT_DIR, f"config.{config_file_path}.ini")
 
     config = configparser.ConfigParser()
     config.read(file_path)
@@ -130,15 +127,14 @@ py_neo_cast_map = {
 
 class Db:
     def __init__(
-        self,
-        config_file=defaults.config_file_path,
-        database: Optional[str] = None
+        self, config_file=defaults.config_file_path, database: Optional[str] = None
     ):
         self.__config = get_config(config_file)
         self.database = database if database else self.__config.database
         self.driver = GraphDatabase.driver(
-            self.__config.uri, auth=(
-                self.__config.user, self.__config.password), database=self.database
+            self.__config.uri,
+            auth=(self.__config.user, self.__config.password),
+            database=self.database,
         )
         self.session = self.driver.session()
 
@@ -150,36 +146,48 @@ class Db:
 
     @property
     def databases(self):
-        return [x['name'] for x in self.show_databases() if x['type'] == 'standard']
+        return [x["name"] for x in self.show_databases() if x["type"] == "standard"]
 
-    def graph_config_init(self, keep_language_tag:bool = True, label_prefixes=False, multiple_values_for_namespace_uris = []):
+    def graph_config_init(
+        self,
+        keep_language_tag: bool = True,
+        label_prefixes=False,
+        multiple_values_for_namespace_uris=[],
+    ):
         configs = []
-        
+
         if keep_language_tag:
             configs.append("keepLangTag: true")
-        
-        if label_prefixes==False:
-            configs.append('handleVocabUris: "IGNORE"')
-        
-        if multiple_values_for_namespace_uris:
-            uris_str = ", ".join([f'"{x}"' for x in multiple_values_for_namespace_uris]) 
-            configs.append(f'multivalPropList: [{uris_str}]')
 
-        config_str = ''
+        if label_prefixes == False:
+            configs.append('handleVocabUris: "IGNORE"')
+
+        if multiple_values_for_namespace_uris:
+            uris_str = ", ".join([f'"{x}"' for x in multiple_values_for_namespace_uris])
+            configs.append(f"multivalPropList: [{uris_str}]")
+
+        config_str = ""
         if configs:
             joined_configs = ", ".join(configs)
-            config_str = f'{{ {joined_configs} }}'
+            config_str = f"{{ {joined_configs} }}"
 
         self.session.run(f"CALL n10s.graphconfig.init({config_str})")
 
-    def graphconfig_set(self,
-                        keepLangTag: bool = True,
-                        handleMultival: Optional[str] = 'ARRAY',
-                        multivalPropList: Optional[List[str]] = [],
-                        handleVocabUris: str = "IGNORE"):
-
-        handleMultival_cypher = f'handleMultival: "{handleMultival}",' if handleMultival else ''
-        multivalPropList_cypher = f"multivalPropList : {json.dumps(multivalPropList)}," if multivalPropList else ''
+    def graphconfig_set(
+        self,
+        keepLangTag: bool = True,
+        handleMultival: Optional[str] = "ARRAY",
+        multivalPropList: Optional[List[str]] = [],
+        handleVocabUris: str = "IGNORE",
+    ):
+        handleMultival_cypher = (
+            f'handleMultival: "{handleMultival}",' if handleMultival else ""
+        )
+        multivalPropList_cypher = (
+            f"multivalPropList : {json.dumps(multivalPropList)},"
+            if multivalPropList
+            else ""
+        )
 
         cypher_graphconfig = f"""CALL n10s.graphconfig.set({{
             keepLangTag: {json.dumps(keepLangTag)},
@@ -197,19 +205,26 @@ class Db:
     @property
     def nodes_schema_as_df(self):
         """Get the database schema."""
-        return pd.DataFrame(self.schema[0]['nodes']).set_index('name')
+        return pd.DataFrame(self.schema[0]["nodes"]).set_index("name")
 
     @property
     def relationships_schema_as_df(self):
         """Get the database schema."""
-        return pd.DataFrame([{'subject': x[0]['name'], 'name': x[1], 'object': x[2]['name']} for x in self.schema[0]['relationships']])
+        return pd.DataFrame(
+            [
+                {"subject": x[0]["name"], "name": x[1], "object": x[2]["name"]}
+                for x in self.schema[0]["relationships"]
+            ]
+        )
 
     @property
     def database_names(self):
         """All databases except system."""
-        return [x['name'] for x in self.exec_data("SHOW DATABASES") if x['name'] != 'system']
+        return [
+            x["name"] for x in self.exec_data("SHOW DATABASES") if x["name"] != "system"
+        ]
 
-    def show_schema_in_ipynb(self, format='jpg', interactive=False):
+    def show_schema_in_ipynb(self, format="jpg", interactive=False):
         """Shows the database schema as dot in `jpg` or `svg` format
 
         Note: svg not works in GitHub preview of notebook
@@ -224,17 +239,21 @@ class Db:
             return self.show_graph_interactive(cypher)
         else:
             graph = nx.DiGraph()
-            edges = [(x[0]['name'], x[2]['name'], {'label': x[1]})
-                    for x in self.schema[0]['relationships']]
+            edges = [
+                (x[0]["name"], x[2]["name"], {"label": x[1]})
+                for x in self.schema[0]["relationships"]
+            ]
             graph.add_edges_from(edges)
-            if format == 'svg':
-                svg = nx.nx_agraph.to_agraph(graph).draw(prog='dot', format='svg')
+            if format == "svg":
+                svg = nx.nx_agraph.to_agraph(graph).draw(prog="dot", format="svg")
                 return SVG(svg)
-            elif format == 'jpg':
-                img = nx.nx_agraph.to_agraph(graph).draw(prog='dot', format='jpg')
+            elif format == "jpg":
+                img = nx.nx_agraph.to_agraph(graph).draw(prog="dot", format="jpg")
                 return Image(img)
 
-    def import_ttl(self, path_or_uri: str, init_graph_config=True, file_on_local_machine=False):
+    def import_ttl(
+        self, path_or_uri: str, init_graph_config=True, file_on_local_machine=False
+    ):
         """_summary_
 
         Parameters
@@ -250,18 +269,26 @@ class Db:
         if init_graph_config:
             self.graph_config_init()
 
-        is_file_path = path_or_uri.startswith('/')
-
-        if is_file_path and file_on_local_machine:
+        is_unix_file_path = path_or_uri.startswith("/")
+        if is_unix_file_path:
             uri = f"file://{path_or_uri}"
-            if not os.path.exists(path_or_uri):
-                raise FileNotFoundError(
-                    f'Not able to file {path_or_uri} in path.')
+
+        is_windows_file_path = bool(re.search(r"^[A-Z]:\\", path_or_uri))
+        if is_windows_file_path:
+            uri = f"file:///{path_or_uri}"
+
+        if (
+            file_on_local_machine
+            and (is_unix_file_path or is_windows_file_path)
+            and not os.path.exists(path_or_uri)
+        ):
+            raise FileNotFoundError(f"Not able to file {path_or_uri} in path.")
         else:
             uri = path_or_uri
 
         self.session.run(
-            "CREATE CONSTRAINT n10s_unique_uri IF NOT EXISTS FOR (r:Resource) REQUIRE r.uri IS UNIQUE")
+            "CREATE CONSTRAINT n10s_unique_uri IF NOT EXISTS FOR (r:Resource) REQUIRE r.uri IS UNIQUE"
+        )
 
         cypher_import = f'CALL n10s.rdf.import.fetch("{uri}","Turtle")'
         return self.session.run(cypher_import).data()
@@ -315,7 +342,7 @@ class Db:
             rangeRel: '{rangeRel}'
         }}"""
         # self.session.run('CREATE CONSTRAINT n10s_unique_uri FOR (r:Resource) REQUIRE r.uri IS UNIQUE')
-        self.session.run('call n10s.graphconfig.init()')
+        self.session.run("call n10s.graphconfig.init()")
         cypher = f'CALL n10s.onto.import.fetch("{url}","Turtle", {config})'
         print(cypher)
         return self.session.run(cypher).data()
@@ -334,7 +361,7 @@ class Db:
                     for x in data
                 ]
         return pd.DataFrame(data)
-    
+
     def show_graph_interactive(self, cypher: LiteralString):
         return GraphWidget(graph=self.session.run(cypher).graph())
 
@@ -371,8 +398,7 @@ class Db:
 
     def __get_where_part_by_props(self, node_name: str, props: dict):
         return " AND ".join(
-            [f"{node_name}.{k} = {self.__get_sql_value(v)}" for k, v in props.items(
-            )]
+            [f"{node_name}.{k} = {self.__get_sql_value(v)}" for k, v in props.items()]
         )
 
     def create_edge(self, subj: Node, edge: Edge, obj: Node):
@@ -486,13 +512,17 @@ class Db:
     def delete_all(self) -> int:
         """Delete all nodes and relationships from the database."""
         warnings.warn(
-            "deprecated, because of Neo4J memory overflow, used instead `delete_all_nodes`", DeprecationWarning)
+            "deprecated, because of Neo4J memory overflow, used instead `delete_all_nodes`",
+            DeprecationWarning,
+        )
         # TODO: Deleted in version 1.0
         return self.session.run(
             "MATCH (n) DETACH DELETE n return count(n) AS num"
         ).data()[0]["num"]
 
-    def delete_all_nodes(self, node: Optional[Node] = None, transition_size=10000, add_auto=False):
+    def delete_all_nodes(
+        self, node: Optional[Node] = None, transition_size=10000, add_auto=False
+    ):
         """Delete all nodes and relationships from the database.
 
         Parameters
@@ -503,8 +533,8 @@ class Db:
             Number of node and edges deleted in one transaction, by default 10000
         add_auto: bool
             adds ':auto ' at the beginning of each Cypher query if 'True'[default]
-        """        """"""
-        auto_str = ':auto ' if add_auto else ''
+        """ """"""
+        auto_str = ":auto " if add_auto else ""
 
         if node:
             where = node.get_where("n")
@@ -559,24 +589,28 @@ class Db:
         data = []
         for label in self.node_labels:
             data.append((label, self.get_number_of_nodes(node=Node(label))))
-        df = pd.DataFrame(data, columns=['label', 'number_of_nodes'])
-        return df.set_index('label').sort_values(by=['number_of_nodes'], ascending=False)
-
+        df = pd.DataFrame(data, columns=["label", "number_of_nodes"])
+        return df.set_index("label").sort_values(
+            by=["number_of_nodes"], ascending=False
+        )
 
     def get_relationship_type_statistics(self):
         data = []
         for r_type in self.relationship_types:
             data.append((r_type, self.get_number_of_edges(edge=Edge(r_type))))
-        df = pd.DataFrame(data, columns=['type', 'number_of_relationships'])
-        return df.set_index('type').sort_values(by=['number_of_relationships'], ascending=False)
+        df = pd.DataFrame(data, columns=["type", "number_of_relationships"])
+        return df.set_index("type").sort_values(
+            by=["number_of_relationships"], ascending=False
+        )
 
     def get_label_statistics(self):
         data = []
         for label in self.node_labels:
             data.append((label, self.get_number_of_nodes(node=Node(label))))
-        df = pd.DataFrame(data, columns=['label', 'number_of_nodes'])
-        return df.set_index('label').sort_values(by=['number_of_nodes'], ascending=False)
-
+        df = pd.DataFrame(data, columns=["label", "number_of_nodes"])
+        return df.set_index("label").sort_values(
+            by=["number_of_nodes"], ascending=False
+        )
 
     def get_number_of_edges(self, edge: Optional[Edge] = None) -> int:
         where, label = "", ""
@@ -646,7 +680,9 @@ class Db:
         List[str]
             List of all edge/relationship types
         """
-        return [x['relationshipType'] for x in self.exec_data("CALL db.relationshipTypes")]
+        return [
+            x["relationshipType"] for x in self.exec_data("CALL db.relationshipTypes")
+        ]
 
     def list_all_columns(self):
         return self.exec_data("CALL db.labels() YIELD *")
@@ -683,8 +719,7 @@ class Db:
         import_cols = ""
         if use_cols != None:
             import_cols = (
-                "{" +
-                ", ".join([f"{x.lower()}: line.{x}" for x in use_cols]) + "}"
+                "{" + ", ".join([f"{x.lower()}: line.{x}" for x in use_cols]) + "}"
             )
 
         cypher = f"""LOAD CSV WITH HEADERS FROM
@@ -695,7 +730,7 @@ class Db:
 
     def __get_chunks(self, list_a, chunk_size=1000):
         for i in range(0, len(list_a), chunk_size):
-            yield list_a[i: i + chunk_size]
+            yield list_a[i : i + chunk_size]
 
     def import_nodes_from_mysql(
         self, label, dict_cursor, sql, database="", merge=False

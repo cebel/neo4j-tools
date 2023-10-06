@@ -2,6 +2,6 @@
 
 __author__ = """Christian.Ebeling"""
 __email__ = 'Christian.Ebeling@SCAI.Fraunhofer.de'
-__version__ = '0.1.3'
+__version__ = '0.1.4'
 
 from neo4j_tools.neo4j_tools import Db, Node, Edge
