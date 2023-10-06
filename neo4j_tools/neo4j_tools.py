@@ -234,7 +234,7 @@ class Db:
                 img = nx.nx_agraph.to_agraph(graph).draw(prog='dot', format='jpg')
                 return Image(img)
 
-    def import_ttl(self, path_or_uri: str, init_graph_config=True):
+    def import_ttl(self, path_or_uri: str, init_graph_config=True, file_on_local_machine=False):
         """_summary_
 
         Parameters
@@ -252,7 +252,7 @@ class Db:
 
         is_file_path = path_or_uri.startswith('/')
 
-        if is_file_path:
+        if is_file_path and file_on_local_machine:
             uri = f"file://{path_or_uri}"
             if not os.path.exists(path_or_uri):
                 raise FileNotFoundError(
